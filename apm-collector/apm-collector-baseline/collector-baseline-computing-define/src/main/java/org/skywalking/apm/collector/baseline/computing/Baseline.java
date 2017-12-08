@@ -18,24 +18,12 @@
 
 package org.skywalking.apm.collector.baseline.computing;
 
-import org.skywalking.apm.collector.baseline.computing.service.ComputingService;
-import org.skywalking.apm.collector.core.module.Module;
-
 /**
- * The <code>ComputingModule</code> defines the required service interfaces.
- *
- * @author wu-sheng, zhang-chen
+ * @author Zhang, Chen
  */
-public class ComputingModule extends Module {
-    public static final String NAME = "baseline-computing";
+public class Baseline extends DailyData {
 
-    @Override
-    public String name() {
-        return NAME;
-    }
-
-    @Override
-    public Class[] services() {
-        return new Class[] {ComputingService.class};
+    public Baseline(int[] data) {
+        super(data);
     }
 }
