@@ -81,6 +81,7 @@ Release Notes.
 * Performance: compile LAL DSL statically and run with type checked.
 * Add pagination to event query protocol.
 * Performance: optimize Envoy error logs persistence performance.
+* Support configure sampling rate dynamically for service dimension on the backend side.
 
 #### UI
 

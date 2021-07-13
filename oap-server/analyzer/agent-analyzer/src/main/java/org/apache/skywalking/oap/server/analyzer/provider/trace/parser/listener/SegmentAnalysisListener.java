@@ -21,13 +21,14 @@ package org.apache.skywalking.oap.server.analyzer.provider.trace.parser.listener
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.skywalking.apm.network.language.agent.v3.SegmentObject;
 import org.apache.skywalking.apm.network.language.agent.v3.SpanObject;
 import org.apache.skywalking.apm.util.StringUtil;
 import org.apache.skywalking.oap.server.analyzer.provider.AnalyzerModuleConfig;
-import org.apache.skywalking.oap.server.analyzer.provider.trace.TraceLatencyThresholdsAndWatcher;
+import org.apache.skywalking.oap.server.analyzer.provider.trace.TraceSampleRateSettingWatcher;
 import org.apache.skywalking.oap.server.analyzer.provider.trace.parser.listener.strategy.SegmentStatusAnalyzer;
 import org.apache.skywalking.oap.server.analyzer.provider.trace.parser.listener.strategy.SegmentStatusStrategy;
 import org.apache.skywalking.oap.server.core.Const;
@@ -55,8 +56,7 @@ public class SegmentAnalysisListener implements FirstAnalysisListener, EntryAnal
     private final NamingControl namingControl;
     private final List<String> searchableTagKeys;
     private final SegmentStatusAnalyzer segmentStatusAnalyzer;
-    private final TraceLatencyThresholdsAndWatcher traceLatencyThresholdsAndWatcher;
-
+    private final TraceSampleRateSettingWatcher traceSampleRateSettingWatcher;
     private final Segment segment = new Segment();
     private SAMPLE_STATUS sampleStatus = SAMPLE_STATUS.UNKNOWN;
     private String serviceName = Const.EMPTY_STRING;
@@ -82,8 +82,8 @@ public class SegmentAnalysisListener implements FirstAnalysisListener, EntryAnal
         if (StringUtil.isEmpty(serviceId)) {
             serviceName = namingControl.formatServiceName(segmentObject.getService());
             serviceId = IDManager.ServiceID.buildId(
-                serviceName,
-                NodeType.Normal
+                    serviceName,
+                    NodeType.Normal
             );
         }
 
@@ -92,8 +92,8 @@ public class SegmentAnalysisListener implements FirstAnalysisListener, EntryAnal
         segment.setSegmentId(segmentObject.getTraceSegmentId());
         segment.setServiceId(serviceId);
         segment.setServiceInstanceId(IDManager.ServiceInstanceID.buildId(
-            serviceId,
-            namingControl.formatInstanceName(segmentObject.getServiceInstance())
+                serviceId,
+                namingControl.formatInstanceName(segmentObject.getServiceInstance())
         ));
         segment.setLatency(duration);
         segment.setStartTime(startTimestamp);
@@ -105,8 +105,8 @@ public class SegmentAnalysisListener implements FirstAnalysisListener, EntryAnal
 
         endpointName = namingControl.formatEndpointName(serviceName, span.getOperationName());
         endpointId = IDManager.EndpointID.buildId(
-            serviceId,
-            endpointName
+                serviceId,
+                endpointName
         );
     }
 
@@ -115,13 +115,13 @@ public class SegmentAnalysisListener implements FirstAnalysisListener, EntryAnal
         if (StringUtil.isEmpty(serviceId)) {
             serviceName = namingControl.formatServiceName(segmentObject.getService());
             serviceId = IDManager.ServiceID.buildId(
-                serviceName, NodeType.Normal);
+                    serviceName, NodeType.Normal);
         }
 
         endpointName = namingControl.formatEndpointName(serviceName, span.getOperationName());
         endpointId = IDManager.EndpointID.buildId(
-            serviceId,
-            endpointName
+                serviceId,
+                endpointName
         );
     }
 
@@ -142,11 +142,11 @@ public class SegmentAnalysisListener implements FirstAnalysisListener, EntryAnal
         duration = accurateDuration > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) accurateDuration;
 
         if (sampleStatus.equals(SAMPLE_STATUS.UNKNOWN) || sampleStatus.equals(SAMPLE_STATUS.IGNORE)) {
-            if (sampler.shouldSample(segmentObject.getTraceId())) {
+            if (sampler.shouldSample(segmentObject, duration)) {
                 sampleStatus = SAMPLE_STATUS.SAMPLED;
             } else if (isError && forceSampleErrorSegment) {
                 sampleStatus = SAMPLE_STATUS.SAMPLED;
-            } else if (traceLatencyThresholdsAndWatcher.shouldSample(duration)) {
+            } else if (traceSampleRateSettingWatcher.shouldSample(duration)) {
                 sampleStatus = SAMPLE_STATUS.SAMPLED;
             } else {
                 sampleStatus = SAMPLE_STATUS.IGNORE;
@@ -198,34 +198,34 @@ public class SegmentAnalysisListener implements FirstAnalysisListener, EntryAnal
         private final NamingControl namingControl;
         private final List<String> searchTagKeys;
         private final SegmentStatusAnalyzer segmentStatusAnalyzer;
-        private final TraceLatencyThresholdsAndWatcher traceLatencyThresholdsAndWatcher;
+        private final TraceSampleRateSettingWatcher traceSampleRateSettingWatcher;
 
         public Factory(ModuleManager moduleManager, AnalyzerModuleConfig config) {
             this.sourceReceiver = moduleManager.find(CoreModule.NAME).provider().getService(SourceReceiver.class);
             final ConfigService configService = moduleManager.find(CoreModule.NAME)
-                                                             .provider()
-                                                             .getService(ConfigService.class);
+                    .provider()
+                    .getService(ConfigService.class);
             this.searchTagKeys = Arrays.asList(configService.getSearchableTracesTags().split(Const.COMMA));
-            this.sampler = new TraceSegmentSampler(config.getTraceSampleRateWatcher());
+            this.sampler = new TraceSegmentSampler(config.getTraceSampleRateSettingWatcher());
             this.forceSampleErrorSegment = config.isForceSampleErrorSegment();
             this.namingControl = moduleManager.find(CoreModule.NAME)
-                                              .provider()
-                                              .getService(NamingControl.class);
+                    .provider()
+                    .getService(NamingControl.class);
             this.segmentStatusAnalyzer = SegmentStatusStrategy.findByName(config.getSegmentStatusAnalysisStrategy())
-                                                              .getExceptionAnalyzer();
-            this.traceLatencyThresholdsAndWatcher = config.getTraceLatencyThresholdsAndWatcher();
+                    .getExceptionAnalyzer();
+            this.traceSampleRateSettingWatcher = config.getTraceSampleRateSettingWatcher();
         }
 
         @Override
         public AnalysisListener create(ModuleManager moduleManager, AnalyzerModuleConfig config) {
             return new SegmentAnalysisListener(
-                sourceReceiver,
-                sampler,
-                forceSampleErrorSegment,
-                namingControl,
-                searchTagKeys,
-                segmentStatusAnalyzer,
-                traceLatencyThresholdsAndWatcher
+                    sourceReceiver,
+                    sampler,
+                    forceSampleErrorSegment,
+                    namingControl,
+                    searchTagKeys,
+                    segmentStatusAnalyzer,
+                    traceSampleRateSettingWatcher
             );
         }
     }
